@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 red='\e[91m'
 green='\e[92m'
@@ -34,7 +35,10 @@ backup="/etc/v2ray/233blog_v2ray_backup.conf"
 
 if [[ -f /usr/bin/v2ray/v2ray && -f /etc/v2ray/config.json ]] && [[ -f $backup && -d /etc/v2ray/233boy/v2ray ]]; then
 
-	. $backup
+	if [ -f "$backup" ]; then
+		[ "$(stat -c %U "$backup" 2>/dev/null)" = "root" ] || echo "警告：备份文件属主不是 root"
+		. "$backup"
+	fi
 
 elif [[ -f /usr/bin/v2ray/v2ray && -f /etc/v2ray/config.json ]] && [[ -f /etc/v2ray/233blog_v2ray_backup.txt && -d /etc/v2ray/233boy/v2ray ]]; then
 
@@ -44,14 +48,14 @@ else
 	echo -e " 哎呀哎呀…… ${red}出错咯...请重新安装V2Ray${none} ${yellow}~(^_^) ${none}" && exit 1
 fi
 
-if [[ $mark != "v3" ]]; then
+if [[ ${mark:-} != "v3" ]]; then
 	. /etc/v2ray/233boy/v2ray/tools/v3.sh
 fi
 if [[ $v2ray_transport -ge 18 ]]; then
 	dynamicPort=true
 	port_range="${v2ray_dynamicPort_start}-${v2ray_dynamicPort_end}"
 fi
-if [[ $path_status ]]; then
+if [[ ${path_status:-} ]]; then
 	is_path=true
 fi
 
@@ -59,10 +63,10 @@ uuid=$(cat /proc/sys/kernel/random/uuid)
 old_id="e55c8d17-2cf3-b21a-bcf1-eeacb011ed79"
 v2ray_server_config="/etc/v2ray/config.json"
 v2ray_client_config="/etc/v2ray/233blog_v2ray_config.json"
-v2ray_pid=$(pgrep -f /usr/bin/v2ray/v2ray)
-caddy_pid=$(pgrep -f /usr/local/bin/caddy)
+v2ray_pid=$(pgrep -f /usr/bin/v2ray/v2ray || true)
+caddy_pid=$(pgrep -f /usr/local/bin/caddy || true)
 _v2ray_sh="/usr/local/sbin/v2ray"
-v2ray_ver="$(/usr/bin/v2ray/v2ray -version | head -n 1 | cut -d " " -f2)"
+v2ray_ver="$(/usr/bin/v2ray/v2ray -version 2>/dev/null | head -n 1 | cut -d ' ' -f2)" || v2ray_ver=""
 . /etc/v2ray/233boy/v2ray/src/init.sh
 systemd=true
 # _test=true
@@ -70,13 +74,13 @@ systemd=true
 if [[ $v2ray_ver != v* ]]; then
 	v2ray_ver="v$v2ray_ver"
 fi
-if [[ ! -f $_v2ray_sh ]]; then
-	mv -f /usr/local/bin/v2ray $_v2ray_sh
-	chmod +x $_v2ray_sh
+if [[ ! -f ${_v2ray_sh:-} ]]; then
+	mv -f /usr/local/bin/v2ray "${_v2ray_sh}"
+	chmod +x "${_v2ray_sh}"
 	echo -e "\n $yellow 警告: 请重新登录 SSH 以避免出现 v2ray 命令未找到的情况。$none  \n" && exit 1
 fi
 
-if [ $v2ray_pid ]; then
+if pgrep -f /usr/bin/v2ray/v2ray >/dev/null; then
 	v2ray_status="$green正在运行$none"
 else
 	v2ray_status="$red未在运行$none"
@@ -316,7 +320,7 @@ shadowsocks_port_config() {
 			;;
 		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
 			if [[ $v2ray_transport == [45] ]]; then
-				local tls=ture
+				local tls=true
 			fi
 			if [[ $tls && $new_ssport == "80" ]] || [[ $tls && $new_ssport == "443" ]]; then
 				echo
@@ -434,7 +438,7 @@ change_shadowsocks_port() {
 			;;
 		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
 			if [[ $v2ray_transport == [45] ]]; then
-				local tls=ture
+				local tls=true
 			fi
 			if [[ $tls && $new_ssport == "80" ]] || [[ $tls && $new_ssport == "443" ]]; then
 				echo
@@ -901,13 +905,13 @@ old_transport() {
 			do_service stop caddy
 			if [[ $systemd ]]; then
 				systemctl disable caddy >/dev/null 2>&1
-			else
+			elif command -v update-rc.d >/dev/null 2>&1; then
 				update-rc.d -f caddy remove >/dev/null 2>&1
 			fi
 		elif [[ $caddy ]]; then
 			if [[ $systemd ]]; then
 				systemctl disable caddy >/dev/null 2>&1
-			else
+			elif command -v update-rc.d >/dev/null 2>&1; then
 				update-rc.d -f caddy remove >/dev/null 2>&1
 			fi
 		fi
@@ -927,6 +931,12 @@ tls_config() {
 		echo -e "请输入一个 $magenta正确的域名$none，一定一定一定要正确，不！能！出！错！"
 		read -p "(例如：233blog.com): " new_domain
 		[ -z "$new_domain" ] && error && continue
+		if ! [[ $new_domain =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
+			echo
+			echo -e " $red域名格式不正确...请输入合法域名$none"
+			echo
+			error && continue
+		fi
 		echo
 		echo
 		echo -e "$yellow 你的域名 = $cyan$new_domain$none"
@@ -1148,6 +1158,12 @@ path_config() {
 			error
 			;;
 		*)
+			if ! [[ $new_path =~ ^[a-zA-Z0-9_-]+$ ]]; then
+				echo
+				echo -e " 路径只能包含$red 字母、数字、下划线和连字符$none"
+				echo
+				error && continue
+			fi
 			echo
 			echo
 			echo -e "$yellow 分流的路径 = ${cyan}/${new_path}$none"
@@ -1169,6 +1185,13 @@ proxy_site_config() {
 		echo -e "如果不能伪装成功...可以使用 v2ray config 修改伪装的网址"
 		read -p "$(echo -e "(默认: [${cyan}https://liyafly.com$none]):")" new_proxy_site
 		[[ -z $new_proxy_site ]] && new_proxy_site="https://liyafly.com"
+
+		if ! [[ $new_proxy_site =~ ^https?:// ]]; then
+			echo
+			echo -e " 伪装网址必须以 $red http:// $none或$red https:// $none开头"
+			echo
+			error && continue
+		fi
 
 		case $new_proxy_site in
 		*[#$]*)
@@ -2120,7 +2143,8 @@ get_v2ray_config() {
 				echo "开始下载....请选择 V2Ray 客户端配置文件保存位置"
 				echo
 				# sz /etc/v2ray/233blog_v2ray.zip
-				local tmpfile="/tmp/233blog_v2ray_config_$RANDOM.json"
+				local tmpfile
+			tmpfile=$(mktemp /tmp/v2ray_config_XXXXXX.json)
 				cp -f $v2ray_client_config $tmpfile
 				sz $tmpfile
 				echo
@@ -2293,9 +2317,11 @@ other() {
 install_bbr() {
 	local test1=$(sed -n '/net.ipv4.tcp_congestion_control/p' /etc/sysctl.conf)
 	local test2=$(sed -n '/net.core.default_qdisc/p' /etc/sysctl.conf)
-	if [[ $(uname -r | cut -b 1) -eq 4 ]]; then
-		case $(uname -r | cut -b 3-4) in
-		9. | [1-9][0-9])
+	local kernel_major=$(uname -r | cut -d. -f1)
+	local kernel_minor=$(uname -r | cut -d. -f2)
+	if [[ $kernel_major -eq 4 ]]; then
+		case $kernel_minor in
+		9 | [1-9][0-9])
 			if [[ $test1 == "net.ipv4.tcp_congestion_control = bbr" && $test2 == "net.core.default_qdisc = fq" ]]; then
 				local is_bbr=true
 			else
@@ -2324,88 +2350,72 @@ install_bbr() {
 }
 install_lotserver() {
 	# https://moeclub.org/2017/03/08/14/
-	wget --no-check-certificate -qO /tmp/appex.sh "https://raw.githubusercontent.com/0oVicero0/serverSpeeder_Install/master/appex.sh"
+	wget -qO /tmp/appex.sh "https://raw.githubusercontent.com/0oVicero0/serverSpeeder_Install/master/appex.sh"
 	bash /tmp/appex.sh 'install'
 	rm -rf /tmp/appex.sh
 }
 uninstall_lotserver() {
 	# https://moeclub.org/2017/03/08/14/
-	wget --no-check-certificate -qO /tmp/appex.sh "https://raw.githubusercontent.com/0oVicero0/serverSpeeder_Install/master/appex.sh"
+	wget -qO /tmp/appex.sh "https://raw.githubusercontent.com/0oVicero0/serverSpeeder_Install/master/appex.sh"
 	bash /tmp/appex.sh 'uninstall'
 	rm -rf /tmp/appex.sh
 }
 
 open_port() {
-	if [[ $cmd == "apt-get" ]]; then
+	if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld; then
 		if [[ $1 != "multiport" ]]; then
-			# if [[ $cmd == "apt-get" ]]; then
-			iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			iptables -I INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-			ip6tables -I INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			ip6tables -I INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-
-			# iptables-save >/etc/iptables.rules.v4
-			# ip6tables-save >/etc/iptables.rules.v6
-			# else
-			# 	firewall-cmd --permanent --zone=public --add-port=$1/tcp
-			# 	firewall-cmd --permanent --zone=public --add-port=$1/udp
-			# 	firewall-cmd --reload
-			# fi
+			firewall-cmd --permanent --zone=public --add-port="$1/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --add-port="$1/udp" >/dev/null 2>&1
 		else
-			# if [[ $cmd == "apt-get" ]]; then
+			local multi_port="${v2ray_dynamic_port_start_input}-${v2ray_dynamic_port_end_input}"
+			firewall-cmd --permanent --zone=public --add-port="$multi_port/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --add-port="$multi_port/udp" >/dev/null 2>&1
+		fi
+		firewall-cmd --reload >/dev/null 2>&1
+	elif [[ $cmd == "apt-get" ]]; then
+		if [[ $1 != "multiport" ]]; then
+			iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			iptables -I INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+			ip6tables -I INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			ip6tables -I INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+		else
 			local multiport="${v2ray_dynamic_port_start_input}:${v2ray_dynamic_port_end_input}"
-			iptables -I INPUT -p tcp --match multiport --dports $multiport -j ACCEPT
-			iptables -I INPUT -p udp --match multiport --dports $multiport -j ACCEPT
-			ip6tables -I INPUT -p tcp --match multiport --dports $multiport -j ACCEPT
-			ip6tables -I INPUT -p udp --match multiport --dports $multiport -j ACCEPT
-
-			# iptables-save >/etc/iptables.rules.v4
-			# ip6tables-save >/etc/iptables.rules.v6
-			# else
-			# 	local multi_port="${v2ray_dynamic_port_start_input}-${v2ray_dynamic_port_end_input}"
-			# 	firewall-cmd --permanent --zone=public --add-port=$multi_port/tcp
-			# 	firewall-cmd --permanent --zone=public --add-port=$multi_port/udp
-			# 	firewall-cmd --reload
-			# fi
+			iptables -I INPUT -p tcp --match multiport --dports "$multiport" -j ACCEPT
+			iptables -I INPUT -p udp --match multiport --dports "$multiport" -j ACCEPT
+			ip6tables -I INPUT -p tcp --match multiport --dports "$multiport" -j ACCEPT
+			ip6tables -I INPUT -p udp --match multiport --dports "$multiport" -j ACCEPT
 		fi
 		iptables-save >/etc/iptables.rules.v4
 		ip6tables-save >/etc/iptables.rules.v6
-		# else
-		# 	service iptables save >/dev/null 2>&1
-		# 	service ip6tables save >/dev/null 2>&1
 	fi
 
 }
 del_port() {
-	if [[ $cmd == "apt-get" ]]; then
+	if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld; then
 		if [[ $1 != "multiport" ]]; then
-			# if [[ $cmd == "apt-get" ]]; then
-			iptables -D INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			iptables -D INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-			ip6tables -D INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			ip6tables -D INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-			# else
-			# 	firewall-cmd --permanent --zone=public --remove-port=$1/tcp
-			# 	firewall-cmd --permanent --zone=public --remove-port=$1/udp
-			# fi
+			firewall-cmd --permanent --zone=public --remove-port="$1/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --remove-port="$1/udp" >/dev/null 2>&1
 		else
-			# if [[ $cmd == "apt-get" ]]; then
+			local ports="${v2ray_dynamicPort_start}-${v2ray_dynamicPort_end}"
+			firewall-cmd --permanent --zone=public --remove-port="$ports/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --remove-port="$ports/udp" >/dev/null 2>&1
+		fi
+		firewall-cmd --reload >/dev/null 2>&1
+	elif [[ $cmd == "apt-get" ]]; then
+		if [[ $1 != "multiport" ]]; then
+			iptables -D INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			iptables -D INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+			ip6tables -D INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			ip6tables -D INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+		else
 			local ports="${v2ray_dynamicPort_start}:${v2ray_dynamicPort_end}"
-			iptables -D INPUT -p tcp --match multiport --dports $ports -j ACCEPT
-			iptables -D INPUT -p udp --match multiport --dports $ports -j ACCEPT
-			ip6tables -D INPUT -p tcp --match multiport --dports $ports -j ACCEPT
-			ip6tables -D INPUT -p udp --match multiport --dports $ports -j ACCEPT
-			# else
-			# 	local ports="${v2ray_dynamicPort_start}-${v2ray_dynamicPort_end}"
-			# 	firewall-cmd --permanent --zone=public --remove-port=$ports/tcp
-			# 	firewall-cmd --permanent --zone=public --remove-port=$ports/udp
-			# fi
+			iptables -D INPUT -p tcp --match multiport --dports "$ports" -j ACCEPT
+			iptables -D INPUT -p udp --match multiport --dports "$ports" -j ACCEPT
+			ip6tables -D INPUT -p tcp --match multiport --dports "$ports" -j ACCEPT
+			ip6tables -D INPUT -p udp --match multiport --dports "$ports" -j ACCEPT
 		fi
 		iptables-save >/etc/iptables.rules.v4
 		ip6tables-save >/etc/iptables.rules.v6
-		# else
-		# 	service iptables save >/dev/null 2>&1
-		# 	service ip6tables save >/dev/null 2>&1
 	fi
 }
 update() {
@@ -2497,94 +2507,94 @@ backup_config() {
 	for keys in $*; do
 		case $keys in
 		v2ray_transport)
-			sed -i "18s/=$v2ray_transport/=$v2ray_transport_opt/" $backup
+			sed -i "/^v2ray_transport=/s/=.*/=$v2ray_transport_opt/" "$backup"
 			;;
 		v2ray_port)
-			sed -i "21s/=$v2ray_port/=$v2ray_port_opt/" $backup
+			sed -i "/^v2ray_port=/s/=.*/=$v2ray_port_opt/" "$backup"
 			;;
 		uuid)
-			sed -i "24s/=$v2ray_id/=$uuid/" $backup
+			sed -i "/^v2ray_id=/s/=.*/=$uuid/" "$backup"
 			;;
 		alterId)
-			sed -i "27s/=$alterId/=$new_alterId/" $backup
+			sed -i "/^alterId=/s/=.*/=$new_alterId/" "$backup"
 			;;
 		v2ray_dynamicPort_start)
-			sed -i "30s/=$v2ray_dynamicPort_start/=$v2ray_dynamic_port_start_input/" $backup
+			sed -i "/^v2ray_dynamicPort_start=/s/=.*/=$v2ray_dynamic_port_start_input/" "$backup"
 			;;
 		v2ray_dynamicPort_end)
-			sed -i "33s/=$v2ray_dynamicPort_end/=$v2ray_dynamic_port_end_input/" $backup
+			sed -i "/^v2ray_dynamicPort_end=/s/=.*/=$v2ray_dynamic_port_end_input/" "$backup"
 			;;
 		domain)
-			sed -i "36s/=$domain/=$new_domain/" $backup
+			sed -i "/^domain=/s/=.*/=$new_domain/" "$backup"
 			;;
 		caddy)
-			sed -i "39s/=/=true/" $backup
+			sed -i "/^caddy=/s/=.*/=true/" "$backup"
 			;;
 		+ss)
-			sed -i "42s/=/=true/; 45s/=$ssport/=$new_ssport/; 48s/=$sspass/=$new_sspass/; 51s/=$ssciphers/=$new_ssciphers/" $backup
+			sed -i "/^shadowsocks=/s/=.*/=true/; /^ssport=/s/=.*/=$new_ssport/; /^sspass=/s/=.*/=$new_sspass/; /^ssciphers=/s/=.*/=$new_ssciphers/" "$backup"
 			;;
 		-ss)
-			sed -i "42s/=true/=/" $backup
+			sed -i "/^shadowsocks=/s/=true/=/" "$backup"
 			;;
 		ssport)
-			sed -i "45s/=$ssport/=$new_ssport/" $backup
+			sed -i "/^ssport=/s/=.*/=$new_ssport/" "$backup"
 			;;
 		sspass)
-			sed -i "48s/=$sspass/=$new_sspass/" $backup
+			sed -i "/^sspass=/s/=.*/=$new_sspass/" "$backup"
 			;;
 		ssciphers)
-			sed -i "51s/=$ssciphers/=$new_ssciphers/" $backup
+			sed -i "/^ssciphers=/s/=.*/=$new_ssciphers/" "$backup"
 			;;
 		+ad)
-			sed -i "54s/=/=true/" $backup
+			sed -i "/^ban_ad=/s/=.*/=true/" "$backup"
 			;;
 		-ad)
-			sed -i "54s/=true/=/" $backup
+			sed -i "/^ban_ad=/s/=true/=/" "$backup"
 			;;
 		+path)
-			sed -i "57s/=/=true/; 60s/=$path/=$new_path/; 63s#=$proxy_site#=$new_proxy_site#" $backup
+			sed -i "/^path_status=/s/=.*/=true/; /^path=/s/=.*/=$new_path/; /^proxy_site=/s#=.*#=$new_proxy_site#" "$backup"
 			;;
 		-path)
-			sed -i "57s/=true/=/" $backup
+			sed -i "/^path_status=/s/=true/=/" "$backup"
 			;;
 		path)
-			sed -i "60s/=$path/=$new_path/" $backup
+			sed -i "/^path=/s/=.*/=$new_path/" "$backup"
 			;;
 		proxy_site)
-			sed -i "63s#=$proxy_site#=$new_proxy_site#" $backup
+			sed -i "/^proxy_site=/s#=.*#=$new_proxy_site#" "$backup"
 			;;
 		+socks)
-			sed -i "66s/=/=true/; 69s/=$socks_port/=$new_socks_port/; 72s/=$socks_username/=$new_socks_username/; 75s/=$socks_userpass/=$new_socks_userpass/;" $backup
+			sed -i "/^socks=/s/=.*/=true/; /^socks_port=/s/=.*/=$new_socks_port/; /^socks_username=/s/=.*/=$new_socks_username/; /^socks_userpass=/s/=.*/=$new_socks_userpass/;" "$backup"
 			;;
 		-socks)
-			sed -i "66s/=true/=/" $backup
+			sed -i "/^socks=/s/=true/=/" "$backup"
 			;;
 		socks_port)
-			sed -i "69s/=$socks_port/=$new_socks_port/" $backup
+			sed -i "/^socks_port=/s/=.*/=$new_socks_port/" "$backup"
 			;;
 		socks_username)
-			sed -i "72s/=$socks_username/=$new_socks_username/" $backup
+			sed -i "/^socks_username=/s/=.*/=$new_socks_username/" "$backup"
 			;;
 		socks_userpass)
-			sed -i "75s/=$socks_userpass/=$new_socks_userpass/" $backup
+			sed -i "/^socks_userpass=/s/=.*/=$new_socks_userpass/" "$backup"
 			;;
 		+mtproto)
-			sed -i "78s/=/=true/; 81s/=$mtproto_port/=$new_mtproto_port/; 84s/=$mtproto_secret/=$new_mtproto_secret/" $backup
+			sed -i "/^mtproto=/s/=.*/=true/; /^mtproto_port=/s/=.*/=$new_mtproto_port/; /^mtproto_secret=/s/=.*/=$new_mtproto_secret/" "$backup"
 			;;
 		-mtproto)
-			sed -i "78s/=true/=/" $backup
+			sed -i "/^mtproto=/s/=true/=/" "$backup"
 			;;
 		mtproto_port)
-			sed -i "81s/=$mtproto_port/=$new_mtproto_port/" $backup
+			sed -i "/^mtproto_port=/s/=.*/=$new_mtproto_port/" "$backup"
 			;;
 		mtproto_secret)
-			sed -i "84s/=$mtproto_secret/=$new_mtproto_secret/" $backup
+			sed -i "/^mtproto_secret=/s/=.*/=$new_mtproto_secret/" "$backup"
 			;;
 		+bt)
-			sed -i "87s/=/=true/" $backup
+			sed -i "/^ban_bt=/s/=.*/=true/" "$backup"
 			;;
 		-bt)
-			sed -i "87s/=true/=/" $backup
+			sed -i "/^ban_bt=/s/=true/=/" "$backup"
 			;;
 		esac
 	done
@@ -2606,6 +2616,7 @@ get_ip() {
 error() {
 
 	echo -e "\n$red 输入错误！$none\n"
+	return 1
 
 }
 
@@ -2761,7 +2772,7 @@ menu() {
 	done
 }
 args=$1
-[ -z $1 ] && args="menu"
+[ -z "${1:-}" ] && args="menu"
 case $args in
 menu)
 	menu
@@ -2836,7 +2847,13 @@ reload)
 	view_v2ray_config_info
 	;;
 time)
-	date -s "$(curl -sI g.cn | grep Date | cut -d' ' -f3-6)Z"
+	if command -v ntpdate >/dev/null 2>&1; then
+		ntpdate pool.ntp.org
+	elif command -v chronyc >/dev/null 2>&1; then
+		chronyc -a makestep >/dev/null 2>&1
+	else
+		echo -e "${yellow}警告: 未找到 ntpdate 或 chronyd，请手动同步时间${none}"
+	fi
 	;;
 log)
 	view_v2ray_log

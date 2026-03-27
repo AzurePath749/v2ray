@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 red='\e[91m'
 green='\e[92m'
@@ -101,7 +102,7 @@ ciphers=(
 
 _load() {
 	local _dir="/etc/v2ray/233boy/v2ray/src/"
-	. "${_dir}$@"
+	. "${_dir}${1}"
 }
 
 v2ray_config() {
@@ -532,7 +533,7 @@ shadowsocks_port_config() {
 			;;
 		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
 			if [[ $v2ray_transport == [45] ]]; then
-				local tls=ture
+				local tls=true
 			fi
 			if [[ $tls && $ssport == "80" ]] || [[ $tls && $ssport == "443" ]]; then
 				echo
@@ -738,7 +739,13 @@ install_v2ray() {
 	fi
 	ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 	[ -d /etc/v2ray ] && rm -rf /etc/v2ray
-	date -s "$(curl -sI g.cn | grep Date | cut -d' ' -f3-6)Z"
+	if command -v ntpdate >/dev/null 2>&1; then
+		ntpdate pool.ntp.org
+	elif command -v chronyc >/dev/null 2>&1; then
+		chronyc -a makestep >/dev/null 2>&1
+	else
+		echo -e "${yellow}警告: 未找到 ntpdate 或 chronyd，请手动同步时间${none}"
+	fi
 
 	if [[ $local_install ]]; then
 		if [[ ! -d $(pwd)/config ]]; then
@@ -775,69 +782,59 @@ install_v2ray() {
 }
 
 open_port() {
-	if [[ $cmd == "apt-get" ]]; then
+	if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld; then
 		if [[ $1 != "multiport" ]]; then
-
-			iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			iptables -I INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-			ip6tables -I INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			ip6tables -I INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-
-			# firewall-cmd --permanent --zone=public --add-port=$1/tcp
-			# firewall-cmd --permanent --zone=public --add-port=$1/udp
-			# firewall-cmd --reload
-
+			firewall-cmd --permanent --zone=public --add-port="$1/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --add-port="$1/udp" >/dev/null 2>&1
 		else
-
+			local multi_port="${v2ray_dynamic_port_start_input}-${v2ray_dynamic_port_end_input}"
+			firewall-cmd --permanent --zone=public --add-port="$multi_port/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --add-port="$multi_port/udp" >/dev/null 2>&1
+		fi
+		firewall-cmd --reload >/dev/null 2>&1
+	elif [[ $cmd == "apt-get" ]]; then
+		if [[ $1 != "multiport" ]]; then
+			iptables -I INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			iptables -I INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+			ip6tables -I INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			ip6tables -I INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+		else
 			local multiport="${v2ray_dynamic_port_start_input}:${v2ray_dynamic_port_end_input}"
-			iptables -I INPUT -p tcp --match multiport --dports $multiport -j ACCEPT
-			iptables -I INPUT -p udp --match multiport --dports $multiport -j ACCEPT
-			ip6tables -I INPUT -p tcp --match multiport --dports $multiport -j ACCEPT
-			ip6tables -I INPUT -p udp --match multiport --dports $multiport -j ACCEPT
-
-			# local multi_port="${v2ray_dynamic_port_start_input}-${v2ray_dynamic_port_end_input}"
-			# firewall-cmd --permanent --zone=public --add-port=$multi_port/tcp
-			# firewall-cmd --permanent --zone=public --add-port=$multi_port/udp
-			# firewall-cmd --reload
-
+			iptables -I INPUT -p tcp --match multiport --dports "$multiport" -j ACCEPT
+			iptables -I INPUT -p udp --match multiport --dports "$multiport" -j ACCEPT
+			ip6tables -I INPUT -p tcp --match multiport --dports "$multiport" -j ACCEPT
+			ip6tables -I INPUT -p udp --match multiport --dports "$multiport" -j ACCEPT
 		fi
 		iptables-save >/etc/iptables.rules.v4
 		ip6tables-save >/etc/iptables.rules.v6
-		# else
-		# 	service iptables save >/dev/null 2>&1
-		# 	service ip6tables save >/dev/null 2>&1
 	fi
 }
 del_port() {
-	if [[ $cmd == "apt-get" ]]; then
+	if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld; then
 		if [[ $1 != "multiport" ]]; then
-			# if [[ $cmd == "apt-get" ]]; then
-			iptables -D INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			iptables -D INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-			ip6tables -D INPUT -m state --state NEW -m tcp -p tcp --dport $1 -j ACCEPT
-			ip6tables -D INPUT -m state --state NEW -m udp -p udp --dport $1 -j ACCEPT
-			# else
-			# 	firewall-cmd --permanent --zone=public --remove-port=$1/tcp
-			# 	firewall-cmd --permanent --zone=public --remove-port=$1/udp
-			# fi
+			firewall-cmd --permanent --zone=public --remove-port="$1/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --remove-port="$1/udp" >/dev/null 2>&1
 		else
-			# if [[ $cmd == "apt-get" ]]; then
+			local ports="${v2ray_dynamicPort_start}-${v2ray_dynamicPort_end}"
+			firewall-cmd --permanent --zone=public --remove-port="$ports/tcp" >/dev/null 2>&1
+			firewall-cmd --permanent --zone=public --remove-port="$ports/udp" >/dev/null 2>&1
+		fi
+		firewall-cmd --reload >/dev/null 2>&1
+	elif [[ $cmd == "apt-get" ]]; then
+		if [[ $1 != "multiport" ]]; then
+			iptables -D INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			iptables -D INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+			ip6tables -D INPUT -m state --state NEW -m tcp -p tcp --dport "$1" -j ACCEPT
+			ip6tables -D INPUT -m state --state NEW -m udp -p udp --dport "$1" -j ACCEPT
+		else
 			local ports="${v2ray_dynamicPort_start}:${v2ray_dynamicPort_end}"
-			iptables -D INPUT -p tcp --match multiport --dports $ports -j ACCEPT
-			iptables -D INPUT -p udp --match multiport --dports $ports -j ACCEPT
-			ip6tables -D INPUT -p tcp --match multiport --dports $ports -j ACCEPT
-			ip6tables -D INPUT -p udp --match multiport --dports $ports -j ACCEPT
-			# else
-			# 	local ports="${v2ray_dynamicPort_start}-${v2ray_dynamicPort_end}"
-			# 	firewall-cmd --permanent --zone=public --remove-port=$ports/tcp
-			# 	firewall-cmd --permanent --zone=public --remove-port=$ports/udp
-			# fi
+			iptables -D INPUT -p tcp --match multiport --dports "$ports" -j ACCEPT
+			iptables -D INPUT -p udp --match multiport --dports "$ports" -j ACCEPT
+			ip6tables -D INPUT -p tcp --match multiport --dports "$ports" -j ACCEPT
+			ip6tables -D INPUT -p udp --match multiport --dports "$ports" -j ACCEPT
 		fi
 		iptables-save >/etc/iptables.rules.v4
 		ip6tables-save >/etc/iptables.rules.v6
-		# else
-		# 	service iptables save >/dev/null 2>&1
-		# 	service ip6tables save >/dev/null 2>&1
 	fi
 
 }
@@ -848,7 +845,7 @@ config() {
 	chmod +x $_v2ray_sh
 
 	v2ray_id=$uuid
-	alterId=233
+	alterId=0
 	ban_bt=true
 	if [[ $v2ray_transport -ge 18 ]]; then
 		v2ray_dynamicPort_start=${v2ray_dynamic_port_start_input}
@@ -891,26 +888,28 @@ config() {
 }
 
 backup_config() {
-	sed -i "18s/=1/=$v2ray_transport/; 21s/=2333/=$v2ray_port/; 24s/=$old_id/=$uuid/" $backup
+	sed -i "/^v2ray_transport=/s/=.*/=$v2ray_transport/; /^v2ray_port=/s/=.*/=$v2ray_port/; /^v2ray_id=/s/=.*/=$uuid/" "$backup"
 	if [[ $v2ray_transport -ge 18 ]]; then
-		sed -i "30s/=10000/=$v2ray_dynamic_port_start_input/; 33s/=20000/=$v2ray_dynamic_port_end_input/" $backup
+		sed -i "/^v2ray_dynamicPort_start=/s/=.*/=$v2ray_dynamic_port_start_input/; /^v2ray_dynamicPort_end=/s/=.*/=$v2ray_dynamic_port_end_input/" "$backup"
 	fi
 	if [[ $shadowsocks ]]; then
-		sed -i "42s/=/=true/; 45s/=6666/=$ssport/; 48s/=233blog.com/=$sspass/; 51s/=chacha20-ietf/=$ssciphers/" $backup
+		sed -i "/^shadowsocks=/s/=.*/=true/; /^ssport=/s/=.*/=$ssport/; /^sspass=/s/=.*/=$sspass/; /^ssciphers=/s/=.*/=$ssciphers/" "$backup"
 	fi
-	[[ $v2ray_transport == [45] ]] && sed -i "36s/=233blog.com/=$domain/" $backup
-	[[ $caddy ]] && sed -i "39s/=/=true/" $backup
-	[[ $ban_ad ]] && sed -i "54s/=/=true/" $backup
+	[[ $v2ray_transport == [45] ]] && sed -i "/^domain=/s/=.*/=$domain/" "$backup"
+	[[ $caddy ]] && sed -i "/^caddy=/s/=.*/=true/" "$backup"
+	[[ $ban_ad ]] && sed -i "/^ban_ad=/s/=.*/=true/" "$backup"
 	if [[ $is_path ]]; then
-		sed -i "57s/=/=true/; 60s/=233blog/=$path/" $backup
-		sed -i "63s#=https://liyafly.com#=$proxy_site#" $backup
+		sed -i "/^path_status=/s/=.*/=true/; /^path=/s/=.*/=$path/" "$backup"
+		sed -i "/^proxy_site=/s#=.*#=$proxy_site#" "$backup"
 	fi
 }
 
 try_enable_bbr() {
-	if [[ $(uname -r | cut -b 1) -eq 4 ]]; then
-		case $(uname -r | cut -b 3-4) in
-		9. | [1-9][0-9])
+	local kernel_major=$(uname -r | cut -d. -f1)
+	local kernel_minor=$(uname -r | cut -d. -f2)
+	if [[ $kernel_major -eq 4 ]]; then
+		case $kernel_minor in
+		9 | [1-9][0-9])
 			sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
 			sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
 			echo "net.ipv4.tcp_congestion_control = bbr" >>/etc/sysctl.conf
@@ -936,6 +935,7 @@ get_ip() {
 error() {
 
 	echo -e "\n$red 输入错误！$none\n"
+	return 1
 
 }
 
@@ -1000,7 +1000,10 @@ install() {
 uninstall() {
 
 	if [[ -f /usr/bin/v2ray/v2ray && -f /etc/v2ray/config.json ]] && [[ -f $backup && -d /etc/v2ray/233boy/v2ray ]]; then
-		. $backup
+		if [ -f "$backup" ]; then
+			[ "$(stat -c %U "$backup" 2>/dev/null)" = "root" ] || echo "警告：备份文件属主不是 root"
+			. "$backup"
+		fi
 		if [[ $mark ]]; then
 			_load uninstall.sh
 		else
@@ -1025,7 +1028,7 @@ uninstall() {
 
 args=$1
 _gitbranch=$2
-[ -z $1 ] && args="online"
+[ -z "${1:-}" ] && args="online"
 case $args in
 online)
 	#hello world

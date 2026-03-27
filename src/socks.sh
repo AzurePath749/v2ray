@@ -36,7 +36,7 @@ _socks_main() {
 			echo
 			echo -e "$yellow 5. $none关闭 Socks"
 			echo
-			read -p "$(echo -e "请选择 [${magenta}1-4$none]:")" _opt
+			read -p "$(echo -e "请选择 [${magenta}1-5$none]:")" _opt
 			if [[ -z $_opt ]]; then
 				error
 			else
@@ -160,7 +160,7 @@ socks_port_config() {
 			;;
 		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
 			if [[ $v2ray_transport == [45] ]]; then
-				local tls=ture
+				local tls=true
 			fi
 			if [[ $tls && $new_socks_port == "80" ]] || [[ $tls && $new_socks_port == "443" ]]; then
 				echo
@@ -337,7 +337,7 @@ change_socks_port_config() {
 			;;
 		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
 			if [[ $v2ray_transport == [45] ]]; then
-				local tls=ture
+				local tls=true
 			fi
 			if [[ $tls && $new_socks_port == "80" ]] || [[ $tls && $new_socks_port == "443" ]]; then
 				echo

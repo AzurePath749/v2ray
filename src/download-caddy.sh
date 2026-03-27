@@ -10,7 +10,7 @@ _download_caddy_file() {
 
 	mkdir -p $caddy_tmp
 
-	if ! wget --no-check-certificate -O "$caddy_tmp_file" $caddy_download_link; then
+	if ! wget -O "$caddy_tmp_file" "$caddy_download_link"; then
 		echo -e "$red 下载 Caddy 失败！$none" && exit 1
 	fi
 
@@ -33,7 +33,9 @@ _install_caddy_service() {
 		cp -f ${caddy_tmp}init/linux-sysvinit/caddy /etc/init.d/caddy
 		# sed -i "s/www-data/root/g" /etc/init.d/caddy
 		chmod +x /etc/init.d/caddy
-		update-rc.d -f caddy defaults
+		if command -v update-rc.d >/dev/null 2>&1; then
+			update-rc.d -f caddy defaults
+		fi
 	fi
 
 	mkdir -p /etc/ssl/caddy

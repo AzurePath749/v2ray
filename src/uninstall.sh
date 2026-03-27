@@ -79,33 +79,33 @@ if [[ $is_uninstall_v2ray && $is_uninstall_caddy ]]; then
 		del_port $v2ray_port
 	fi
 
-	[ $cmd == "apt-get" ] && rm -rf /etc/network/if-pre-up.d/iptables
+	[ "${cmd:-}" == "apt-get" ] && rm -rf /etc/network/if-pre-up.d/iptables
 
 	# [ $v2ray_pid ] && systemctl stop v2ray
 	[ $v2ray_pid ] && do_service stop v2ray
 
 	rm -rf /usr/bin/v2ray
-	rm -rf $_v2ray_sh
+	[ -f "$_v2ray_sh" ] && rm -f "$_v2ray_sh"
 	rm -rf /etc/v2ray
 	rm -rf /var/log/v2ray
 
 	# [ $caddy_pid ] && systemctl stop caddy
 	[ $caddy_pid ] && do_service stop caddy
 
-	rm -rf /usr/local/bin/caddy
+	[ -f /usr/local/bin/caddy ] && rm -f /usr/local/bin/caddy
 	rm -rf /etc/caddy
 	rm -rf /etc/ssl/caddy
 
 	if [[ $systemd ]]; then
 		systemctl disable v2ray >/dev/null 2>&1
-		rm -rf /lib/systemd/system/v2ray.service
+		[ -f /lib/systemd/system/v2ray.service ] && rm -f /lib/systemd/system/v2ray.service
 		systemctl disable caddy >/dev/null 2>&1
-		rm -rf /lib/systemd/system/caddy.service
+		[ -f /lib/systemd/system/caddy.service ] && rm -f /lib/systemd/system/caddy.service
 	else
 		update-rc.d -f caddy remove >/dev/null 2>&1
 		update-rc.d -f v2ray remove >/dev/null 2>&1
-		rm -rf /etc/init.d/caddy
-		rm -rf /etc/init.d/v2ray
+		[ -f /etc/init.d/caddy ] && rm -f /etc/init.d/caddy
+		[ -f /etc/init.d/v2ray ] && rm -f /etc/init.d/v2ray
 	fi
 	# clear
 	echo
@@ -141,21 +141,21 @@ elif [[ $is_uninstall_v2ray ]]; then
 		del_port $v2ray_port
 	fi
 
-	[ $cmd == "apt-get" ] && rm -rf /etc/network/if-pre-up.d/iptables
+	[ "${cmd:-}" == "apt-get" ] && rm -rf /etc/network/if-pre-up.d/iptables
 
 	# [ $v2ray_pid ] && systemctl stop v2ray
 	[ $v2ray_pid ] && do_service stop v2ray
 
 	rm -rf /usr/bin/v2ray
-	rm -rf $_v2ray_sh
+	[ -f "$_v2ray_sh" ] && rm -f "$_v2ray_sh"
 	rm -rf /etc/v2ray
 	rm -rf /var/log/v2ray
 	if [[ $systemd ]]; then
 		systemctl disable v2ray >/dev/null 2>&1
-		rm -rf /lib/systemd/system/v2ray.service
+		[ -f /lib/systemd/system/v2ray.service ] && rm -f /lib/systemd/system/v2ray.service
 	else
 		update-rc.d -f v2ray remove >/dev/null 2>&1
-		rm -rf /etc/init.d/v2ray
+		[ -f /etc/init.d/v2ray ] && rm -f /etc/init.d/v2ray
 	fi
 	# clear
 	echo

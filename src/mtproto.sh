@@ -70,7 +70,7 @@ _mtproto_ask() {
 	echo -e " $red大佬...你没有配置 Telegram MTProto $none...不过现在想要配置的话也是可以的 ^_^"
 	echo
 	echo
-	new_mtproto_secret="dd$(date | md5sum | cut -c-30)"
+	new_mtproto_secret="dd$(head -c 32 /dev/urandom | xxd -p)"
 	while :; do
 		echo -e "是否配置 ${yellow}Telegram MTProto${none} [${magenta}Y/N$none]"
 		read -p "$(echo -e "(默认 [${cyan}N$none]):") " new_mtproto
@@ -149,7 +149,7 @@ mtproto_port_config() {
 			;;
 		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
 			if [[ $v2ray_transport == [45] ]]; then
-				local tls=ture
+				local tls=true
 			fi
 			if [[ $tls && $new_mtproto_port == "80" ]] || [[ $tls && $new_mtproto_port == "443" ]]; then
 				echo
@@ -191,7 +191,7 @@ mtproto_port_config() {
 
 }
 change_mtproto_secret() {
-	new_mtproto_secret="dd$(date | md5sum | cut -c-30)"
+	new_mtproto_secret="dd$(head -c 32 /dev/urandom | xxd -p)"
 	echo
 	while :; do
 		read -p "$(echo -e "是否更改 ${yellow}Telegram MTProto 密钥${none} [${magenta}Y/N$none]"): " y_n
@@ -239,7 +239,7 @@ change_mtproto_port() {
 			;;
 		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
 			if [[ $v2ray_transport == [45] ]]; then
-				local tls=ture
+				local tls=true
 			fi
 			if [[ $tls && $new_mtproto_port == "80" ]] || [[ $tls && $new_mtproto_port == "443" ]]; then
 				echo

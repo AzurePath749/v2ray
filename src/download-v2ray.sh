@@ -20,7 +20,7 @@ _download_v2ray_file() {
 	v2ray_tmp_file="/tmp/v2ray/v2ray.zip"
 	v2ray_download_link="https://github.com/v2ray/v2ray-core/releases/download/$v2ray_latest_ver/v2ray-linux-${v2ray_bit}.zip"
 
-	if ! wget --no-check-certificate -O "$v2ray_tmp_file" $v2ray_download_link; then
+	if ! wget -O "$v2ray_tmp_file" "$v2ray_download_link"; then
 		echo -e "
         $red 下载 V2Ray 失败啦..可能是你的 VPS 网络太辣鸡了...请重试...$none
         " && exit 1
@@ -43,7 +43,9 @@ _install_v2ray_service() {
 		apt-get install -y daemon
 		cp "/tmp/v2ray/systemv/v2ray" "/etc/init.d/v2ray"
 		chmod +x "/etc/init.d/v2ray"
-		update-rc.d -f v2ray defaults
+		if command -v update-rc.d >/dev/null 2>&1; then
+			update-rc.d -f v2ray defaults
+		fi
 	fi
 }
 
