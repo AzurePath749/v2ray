@@ -1,0 +1,9 @@
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+config/backup.conf
+config/server/
+config/client/
+*.key
+*.cer
